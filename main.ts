@@ -1,40 +1,51 @@
-// main.ts — hand in the X post for the gta6-meme-x-01 bounty.
-// Reads POST.json, checks it names a real X post, writes it to /output.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+// main.ts — hand the X post over for the gta6-meme-x-01 bounty.
+// Reads POST.json from the bot directory, checks it names a real
+// X post, and copies it byte-for-byte to the output directory,
+// where the gate reads it. The entry is the post itself; nothing
+// this program writes about it is judged.
+import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-const INPUT = join(process.cwd(), "POST.json");
-const OUT_DIR = "/output";
-const OUT_FILE = join(OUT_DIR, "POST.json");
 
-function fail(message: string): never {
+const BOT_DIR = process.env.MAKEFUN_BOT_DIR ?? "/bot";
+const OUTPUT_DIR = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
+const POST_FILE = join(BOT_DIR, "POST.json");
+const OUT_FILE = join(OUTPUT_DIR, "POST.json");
+
+// Print a message to stderr and quit with a failure code.
+function die(message) {
   console.error(`error: ${message}`);
   process.exit(1);
 }
 
-// Read POST.json, parse it, and return it once its url checks out.
-function loadPost(): { url: string } {
-  let text: string;
+// Read POST.json, parse it, and return its url once it checks out.
+function readPostUrl() {
+  let text;
   try {
-    text = readFileSync(INPUT, "utf8");
+    text = readFileSync(POST_FILE, "utf8");
   } catch {
-    fail(`cannot read ${INPUT}`);
+    die(`cannot read ${POST_FILE}`);
   }
-  let data: unknown;
+  let data;
   try {
     data = JSON.parse(text);
   } catch {
-    fail(`${INPUT} is not valid JSON`);
+    die(`${POST_FILE} is not valid JSON`);
   }
-  const url = (data as { url?: unknown } | null)?.url;
-  if (typeof url !== "string" || url === "") {
-    fail(`${INPUT} needs a non-empty "url" string`);
+  const url = data && data.url;
+  if (typeof url !== "string" || url.length === 0) {
+    die(`${POST_FILE} needs a non-empty "url" string`);
   }
   if (!url.startsWith("https://")) {
-    fail(`"url" must start with "https://"`);
+    die(`"url" must start with "https://"`);
   }
-  return data as { url: string };
+  return url;
 }
-const post = loadPost();
-mkdirSync(OUT_DIR, { recursive: true });
-writeFileSync(OUT_FILE, JSON.stringify(post, null, 2) + "\n", "utf8");
-console.log(`wrote ${OUT_FILE} for ${post.url}`);
+
+const url = readPostUrl();
+mkdirSync(OUTPUT_DIR, { recursive: true });
+try {
+  copyFileSync(POST_FILE, OUT_FILE);
+} catch (err) {
+  die(`could not copy ${POST_FILE} to ${OUT_FILE}: ${err.message}`);
+}
+console.log(`wrote ${OUT_FILE} for ${url}`);
